@@ -141,7 +141,7 @@ module VagrantPlugins
       end
 
       def handle_output(shell, command, &block)
-        output = shell.run(command) do |out, err|
+        output = shell_run(shell, command) do |out, err|
           block.call(:stdout, out) if block_given? && out
           block.call(:stderr, err) if block_given? && err
         end
@@ -156,6 +156,31 @@ module VagrantPlugins
             @logger.warn("Detected ParserError, setting exit code to 1")
             output.exitcode = 1
           end
+        end
+
+        return output
+      end
+
+      def shell_run(shell, command, &block)
+        out = LineBuffer.new
+        err = LineBuffer.new
+
+        # execute the command and emit its output as complete lines.
+        output = shell.run(command) do |stdout, stderr|
+          out.lines stdout do |line|
+            block.call(line, nil)
+          end
+          err.lines stderr do |line|
+            block.call(nil, line)
+          end
+        end
+
+        # emit the remaining as incomplete/partial lines.
+        out.remaining do |line|
+          block.call(line, nil)
+        end
+        err.remaining do |line|
+          block.call(nil, line)
         end
 
         return output
